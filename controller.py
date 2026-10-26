@@ -39,6 +39,10 @@ def _now_iso():
 class Controller:
     def __init__(self, server_url=None, device_token=None):
         self.lock = threading.Lock()
+        # Lets the local web page wait for the detection switches to change.
+        self.detection_changed = threading.Condition()
+        self.detection_version = 0
+        self._shown_detection = None
         self.settings = dict(DEFAULT_SETTINGS)
         self.settings.update(self._load_saved_settings())
         self.camera = None
@@ -130,8 +134,23 @@ class Controller:
         if self.camera:
             self.camera.animal_detection_enabled = s["animal_detection"]
             self.camera.human_detection_enabled = s["human_detection"]
+        shown = (s["animal_detection"], s["human_detection"])
+        if shown != self._shown_detection:
+            with self.detection_changed:
+                self._shown_detection = shown
+                self.detection_version += 1
+                self.detection_changed.notify_all()
         self.relays.configure(s["auto_duration_s"], s["manual_max_s"])
         self.recorder.configure(s["clip_pre_s"], s["clip_post_s"])
+
+    def wait_for_detection_change(self, version, timeout):
+        """Wait until the detection switches differ from `version`, or `timeout` seconds pass.
+
+        Returns (version, animal_on, human_on).
+        """
+        with self.detection_changed:
+            self.detection_changed.wait_for(lambda: self.detection_version != version, timeout)
+            return self.detection_version, self._shown_detection[0], self._shown_detection[1]
 
     def _load_saved_settings(self):
         try:

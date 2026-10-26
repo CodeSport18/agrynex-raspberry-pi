@@ -35,7 +35,7 @@ cp .env.example .env             # then fill in the server address and device to
 python newer_yolo_detection.py
 ```
 
-Open `http://<pi-address>:5000` on the farm network to see the local feed and turn animal or human detection on and off. These switches stay in sync with the app. A change on either side shows up on the other within about a second, and a change made here while offline is sent to the cloud when the Pi reconnects.
+Open `http://<pi-address>:5000` on the farm network to see the local feed and turn animal or human detection on and off. These switches stay in sync with the app. A change on either side shows up on the other straight away, without refreshing: the Pi pushes changes to this page with Server-Sent Events. A change made here while offline is sent to the cloud when the Pi reconnects.
 
 ## How it behaves
 

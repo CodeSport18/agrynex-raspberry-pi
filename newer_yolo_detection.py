@@ -6,6 +6,7 @@ print(2)
 import time
 print(3)
 import threading
+import json
 print(4)
 # from playsound import playsound
 import socket
@@ -328,6 +329,28 @@ def detection_settings():
         'animal': camera_instance.animal_detection_enabled,
         'human': camera_instance.human_detection_enabled
     })
+
+
+@app.route('/api/detection_events')
+def detection_events():
+    """Server-Sent Events: pushes the detection switches to the page whenever they
+    change, including changes made from the mobile app."""
+    controller = camera_instance.controller if camera_instance else None
+    if controller is None:
+        return Response(status=404)
+
+    def stream():
+        version = None  # Sends the current switches straight away
+        while True:
+            new_version, animal, human = controller.wait_for_detection_change(version, timeout=15)
+            if new_version != version:
+                version = new_version
+                yield f"data: {json.dumps({'animal': animal, 'human': human})}\n\n"
+            else:
+                # Keeps the connection open and notices closed pages.
+                yield ": keep-alive\n\n"
+
+    return Response(stream(), mimetype='text/event-stream', headers={'Cache-Control': 'no-cache'})
 
 
 def find_free_port(start_port=5000, max_attempts=10):

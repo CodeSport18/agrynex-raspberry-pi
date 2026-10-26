@@ -163,22 +163,23 @@
             });
             return res.json();
         }
-        async function loadSettings() {
-            const res = await fetch('/api/detection_settings');
-            const s = await res.json();
+        function showSettings(s) {
             document.getElementById('toggle-animal').classList.toggle('on', s.animal);
             document.getElementById('toggle-animal').setAttribute('aria-checked', s.animal);
             document.getElementById('toggle-human').classList.toggle('on', s.human);
             document.getElementById('toggle-human').setAttribute('aria-checked', s.human);
-            return s;
         }
         function initToggles() {
             let animalOn = true, humanOn = true;
-            loadSettings().then(s => { animalOn = s.animal; humanOn = s.human; });
-            // Pick up changes made from the mobile app or cloud dashboard.
-            setInterval(() => {
-                loadSettings().then(s => { animalOn = s.animal; humanOn = s.human; }).catch(() => {});
-            }, 1000);
+            // The Pi pushes the switches here as soon as they change, including
+            // from the mobile app. EventSource reconnects by itself if the Pi restarts.
+            const events = new EventSource('/api/detection_events');
+            events.onmessage = (e) => {
+                const s = JSON.parse(e.data);
+                animalOn = s.animal;
+                humanOn = s.human;
+                showSettings(s);
+            };
             function handleToggle(type) {
                 return async (e) => {
                     if (type === 'animal') {
