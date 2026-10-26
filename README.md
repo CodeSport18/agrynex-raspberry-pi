@@ -21,13 +21,15 @@ If the internet drops, detection, the siren and the sprinkler keep working on th
 ## Setup
 
 ```bash
-sudo apt install ffmpeg          # encodes alert clips
-python3 -m venv venv
+sudo apt install ffmpeg python3-lgpio   # clip encoding, and the GPIO driver gpiozero needs
+python3 -m venv --system-site-packages venv
 source venv/bin/activate
 pip install -r requirements.txt
 ./download_models.sh
 cp .env.example .env             # then fill in the server address and device token
 ```
+
+`--system-site-packages` lets the venv use the system's `lgpio`. Without it, gpiozero stops with "Unable to load any default pin factory". Don't copy a `venv` folder from another computer or over a USB drive; create it on the Pi.
 
 `AGRYNEX_DEVICE_TOKEN` in `.env` must match `DEVICE_TOKEN` on the cloud server. Without `.env`, the program runs locally only, as it did before the cloud connection was added.
 
