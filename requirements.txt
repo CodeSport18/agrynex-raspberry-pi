@@ -1,0 +1,4 @@
+flask==3.1.2
+gpiozero==2.0.1
+numpy==2.4.2
+opencv-python==4.13.0.92

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animal & Human Detection</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #eee;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding: 1rem;
+        }
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            background: linear-gradient(90deg, #e94560, #0f3460);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .toggle-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .toggle-group span {
+            font-size: 0.95rem;
+            cursor: pointer;
+            user-select: none;
+        }
+        .toggle {
+            position: relative;
+            width: 48px;
+            height: 26px;
+            background: #333;
+            border-radius: 13px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .toggle.on {
+            background: #e94560;
+        }
+        .toggle.human.on {
+            background: #4444ff;
+        }
+        .toggle::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border-radius: 50%;
+            top: 3px;
+            left: 3px;
+            transition: transform 0.2s;
+        }
+        .toggle.on::after {
+            transform: translateX(22px);
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .legend-box {
+            width: 24px;
+            height: 12px;
+            border-radius: 2px;
+        }
+        .legend-box.animal { background: #ff4444; }
+        .legend-box.human { background: #4444ff; }
+        .video-wrapper {
+            background: #0d0d1a;
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+        }
+        .video-wrapper img {
+            width: 100%;
+            display: block;
+            border-radius: 8px;
+            min-height: 400px;
+            background: #1a1a2e;
+        }
+        .status {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+            color: #888;
+        }
+        .status.live {
+            color: #4ade80;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Animal & Human Detection</h1>
+            <div class="controls">
+                <div class="toggle-group" data-toggle="animal">
+                    <div id="toggle-animal" class="toggle on" role="switch" aria-checked="true" tabindex="0"></div>
+                    <span>Animal detection</span>
+                </div>
+                <div class="toggle-group" data-toggle="human">
+                    <div id="toggle-human" class="toggle on" role="switch" aria-checked="true" tabindex="0"></div>
+                    <span>Human detection</span>
+                </div>
+            </div>
+            <div class="legend">
+                <div class="legend-item">
+                    <span class="legend-box animal"></span>
+                    <span>Animal (bird, cat, dog, etc.)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-box human"></span>
+                    <span>Human</span>
+                </div>
+            </div>
+        </header>
+        <div class="video-wrapper">
+            <img src="{{ url_for('video_feed') }}" alt="Live Detection Feed">
+        </div>
+        <p class="status live">● Live</p>
+    </div>
+    <script>
+        async function updateSettings(animal, human) {
+            const res = await fetch('/api/detection_settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ animal, human })
+            });
+            return res.json();
+        }
+        async function loadSettings() {
+            const res = await fetch('/api/detection_settings');
+            const s = await res.json();
+            document.getElementById('toggle-animal').classList.toggle('on', s.animal);
+            document.getElementById('toggle-animal').setAttribute('aria-checked', s.animal);
+            document.getElementById('toggle-human').classList.toggle('on', s.human);
+            document.getElementById('toggle-human').setAttribute('aria-checked', s.human);
+            return s;
+        }
+        function initToggles() {
+            let animalOn = true, humanOn = true;
+            loadSettings().then(s => { animalOn = s.animal; humanOn = s.human; });
+            function handleToggle(type) {
+                return async (e) => {
+                    if (type === 'animal') {
+                        animalOn = !animalOn;
+                        document.getElementById('toggle-animal').classList.toggle('on', animalOn);
+                        document.getElementById('toggle-animal').setAttribute('aria-checked', animalOn);
+                    } else {
+                        humanOn = !humanOn;
+                        document.getElementById('toggle-human').classList.toggle('on', humanOn);
+                        document.getElementById('toggle-human').setAttribute('aria-checked', humanOn);
+                    }
+                    await updateSettings(animalOn, humanOn);
+                };
+            }
+            document.querySelector('[data-toggle="animal"]').addEventListener('click', handleToggle('animal'));
+            document.querySelector('[data-toggle="human"]').addEventListener('click', handleToggle('human'));
+        }
+        initToggles();
+    </script>
+</body>
+</html>

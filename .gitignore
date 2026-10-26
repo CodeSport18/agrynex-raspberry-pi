@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Too large for GitHub; fetch with download_models.sh
+models/yolo/yolov3.weights
+models/yolo/yolov3.weights.zip
+
+# Test videos
+*.mp4
