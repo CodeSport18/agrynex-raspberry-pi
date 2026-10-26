@@ -7,14 +7,27 @@ Runs on a Raspberry Pi at the farm. It watches the camera for animals (MobileNet
 | 12   | Siren     |
 | 16   | Sprinkler |
 
+It connects to the [Agrynex cloud server](https://github.com/CodeSport18/agrynex-cloud-server), so the mobile app can:
+
+- see alerts with a snapshot and a short clip;
+- watch live video;
+- turn the system on or off;
+- switch the siren and sprinkler on or off.
+
+If the internet drops, detection, the siren and the sprinkler keep working on their own. The Pi reconnects when the internet comes back.
+
 ## Setup
 
 ```bash
+sudo apt install ffmpeg          # encodes alert clips
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ./download_models.sh
+cp .env.example .env             # then fill in the server address and device token
 ```
+
+`AGRYNEX_DEVICE_TOKEN` in `.env` must match `DEVICE_TOKEN` on the cloud server. Without `.env`, the program runs locally only, as it did before the cloud connection was added.
 
 ## Run
 
@@ -22,6 +35,33 @@ pip install -r requirements.txt
 python newer_yolo_detection.py
 ```
 
-Open `http://<pi-address>:5000` to see the live feed and turn animal or human detection on and off.
+Open `http://<pi-address>:5000` on the farm network to see the local feed and turn animal or human detection on and off.
 
-`yolo_detection_coyote_video.py` is a test version that reads `coyote_meets_camera (540p).mp4` instead of the camera and doesn't use GPIO. The video isn't in the repo, so put a copy in this folder before running it.
+## How it behaves
+
+- **Detection:** when an animal or human is seen, the siren and sprinkler run for the number of seconds set in the app (default 10).
+- **Alerts:** each detection sends an alert to the cloud. Alerts are at least 30 seconds apart by default, which you can change in the app's settings. An alert includes a snapshot and an H.264 clip covering a few seconds before and after the detection.
+- **System off:** switching the system off in the app pauses both detection and the camera. The siren and sprinkler can still be switched by hand.
+- **Manual control:** a siren or sprinkler switched on from the app turns itself off after the safety limit set in the app (default 5 minutes).
+- **Saved settings:** the last settings from the server are saved in `cloud_settings.json`, so a restart without internet keeps them.
+
+## Files
+
+| File | What it does |
+|---|---|
+| `newer_yolo_detection.py` | Camera loop, detection and the local web viewer |
+| `controller.py` | Connects detection to the relays, alert clips and the cloud |
+| `relays.py` | Siren and sprinkler timing (automatic runs and manual control with a safety limit) |
+| `clip_recorder.py` | Keeps recent frames and encodes alert clips with ffmpeg |
+| `cloud_client.py` | Socket.IO connection to the server, plus a background queue that uploads alerts |
+| `yolo_detection_coyote_video.py` | Older test version that reads `coyote_meets_camera (540p).mp4` and doesn't use GPIO or the cloud |
+
+## Testing on a Mac or PC
+
+The main program runs without a Pi if you use gpiozero's mock pins and a video file:
+
+```bash
+GPIOZERO_PIN_FACTORY=mock AGRYNEX_VIDEO_SOURCE="coyote_meets_camera (540p).mp4" python newer_yolo_detection.py
+```
+
+The coyote video isn't in the repo, so put a copy in this folder first.

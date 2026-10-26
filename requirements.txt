@@ -2,3 +2,7 @@ flask==3.1.2
 gpiozero==2.0.1
 numpy==2.4.2
 opencv-python==4.13.0.92
+python-dotenv==1.2.4
+python-socketio[client]==5.17.0
+requests==2.34.2
+websocket-client==1.9.2

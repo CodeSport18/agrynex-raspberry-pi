@@ -11,9 +11,9 @@ print(4)
 import socket
 print(5)
 from flask import Flask, render_template, Response, request, jsonify
-from gpiozero import LED
-twelve = LED(12)
-sixteen = LED(16)
+import os
+from dotenv import load_dotenv
+from controller import Controller
 print(6)
 
 # --- Performance Configuration ---
@@ -132,10 +132,13 @@ def detect_humans(frame):
 
 # --- Camera Class for Web Streaming ---
 class Camera:
-    def __init__(self, video_source=0):
+    def __init__(self, video_source=0, controller=None):
         self.source = video_source
+        self.controller = controller
         self.cap = cv2.VideoCapture(self.source)
+        self.camera_ok = self.cap.isOpened()
         self.frame = None
+        self.frame_seq = 0
         self.lock = threading.Lock()
         self.running = True
         self.frame_count = 0
@@ -151,6 +154,23 @@ class Camera:
     def _update(self):
         """Main camera update loop with detection"""
         while self.running:
+            # System switched off from the app: pause the camera and detection.
+            if self.controller and not self.controller.system_on:
+                if self.cap.isOpened():
+                    self.cap.release()
+                    self.animal_detections = []
+                    self.human_detections = []
+                    with self.lock:
+                        self.frame = None
+                time.sleep(0.5)
+                continue
+            if not self.cap.isOpened():
+                self.cap = cv2.VideoCapture(self.source)
+                self.camera_ok = self.cap.isOpened()
+                if not self.camera_ok:
+                    time.sleep(2)
+                    continue
+
             ret, frame = self.cap.read()
             if not ret:
                 # If video file, restart from beginning
@@ -158,15 +178,17 @@ class Camera:
                     self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     continue
                 else:
+                    self.camera_ok = False
                     time.sleep(0.1)
                     continue
-            
+            self.camera_ok = True
+
             self.frame_count += 1
+            turn_on = False
             
             # Only run detection every N frames for performance
             if self.frame_count % PROCESS_EVERY_N_FRAMES == 0:
                 # Animal detection
-                turn_on = False
                 if self.animal_detection_enabled:
                     self.animal_detections = detect_animals(frame)
                     current_animal_count = len(self.animal_detections)
@@ -187,13 +209,7 @@ class Camera:
                         turn_on = True
                 else:
                     self.human_detections = []
-                if turn_on == True:
-                    twelve.on()
-                    sixteen.on()
-                else:
-                    twelve.off()
-                    sixteen.off()
-            
+
             # Draw animal detections
             for det in self.animal_detections:
                 (sx, sy, ex, ey) = det['box']
@@ -207,11 +223,19 @@ class Camera:
                 (sx, sy, ex, ey) = det['box']
                 cv2.rectangle(frame, (sx, sy), (ex, ey), (255, 0, 0), 2)
                 label = f"Person: {det['confidence']:.2f}"
-                cv2.putText(frame, label, (sx, sy - 10), 
+                cv2.putText(frame, label, (sx, sy - 10),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-            
+
+            # The siren and sprinkler run for the time set in the app, and
+            # the alert gets the frame with the boxes drawn on it.
+            if self.controller:
+                self.controller.add_frame(frame)
+                if turn_on:
+                    self.controller.on_detection(frame, self.animal_detections, self.human_detections)
+
             with self.lock:
                 self.frame = frame
+                self.frame_seq += 1
     
     def get_frame(self):
         """Get current frame as bytes"""
@@ -220,7 +244,19 @@ class Camera:
                 return None
             ret, buffer = cv2.imencode('.jpg', self.frame)
             return buffer.tobytes()
-    
+
+    def get_live_jpeg(self, max_width, quality):
+        """Smaller frame for the cloud live view. Returns (frame number, jpeg bytes)."""
+        with self.lock:
+            if self.frame is None:
+                return None, None
+            frame, seq = self.frame, self.frame_seq
+        h, w = frame.shape[:2]
+        if w > max_width:
+            frame = cv2.resize(frame, (max_width, int(h * max_width / w)))
+        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+        return (seq, buffer.tobytes()) if ret else (None, None)
+
     # def _play_ding(self):
     #     """Play the ding sound"""
     #     try:
@@ -354,20 +390,26 @@ def main():
     global camera_instance
     
     print("Starting Animal and Human Detection System (Web)...")
+    # Cloud settings come from a .env file next to this script.
+    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
     
     # Load models first
     load_models()
     
-    # Video source - change this to 0 for webcam or a video file path
-    video_source = 0  # 0 for webcam, or path to video file like 'video.mp4'
+    # Video source - 0 for webcam, or set AGRYNEX_VIDEO_SOURCE to a video file path
+    video_source = os.environ.get('AGRYNEX_VIDEO_SOURCE', '0')
+    video_source = int(video_source) if video_source.isdigit() else video_source
     print(f"Video source: {video_source}")
     
-    # Initialize camera
-    camera_instance = Camera(video_source)
+    controller = Controller(os.environ.get('AGRYNEX_SERVER_URL'), os.environ.get('AGRYNEX_DEVICE_TOKEN'))
     
-    if not camera_instance.cap.isOpened():
+    # Initialize camera
+    camera_instance = Camera(video_source, controller)
+    
+    if not camera_instance.camera_ok:
         print(f"Error: Could not open video source {video_source}")
         return
+    controller.start(camera_instance)
     
     # Find an available port
     port = find_free_port(5000)
@@ -386,6 +428,7 @@ def main():
     finally:
         if camera_instance:
             camera_instance.stop()
+        controller.relays.off()
         print("Detection system stopped.")
 
 

@@ -9,3 +9,7 @@ models/yolo/yolov3.weights.zip
 
 # Test videos
 *.mp4
+
+# Cloud secrets and the last settings received from the server
+.env
+cloud_settings.json
