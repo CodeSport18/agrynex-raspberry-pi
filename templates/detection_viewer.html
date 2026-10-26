@@ -175,6 +175,10 @@
         function initToggles() {
             let animalOn = true, humanOn = true;
             loadSettings().then(s => { animalOn = s.animal; humanOn = s.human; });
+            // Pick up changes made from the mobile app or cloud dashboard.
+            setInterval(() => {
+                loadSettings().then(s => { animalOn = s.animal; humanOn = s.human; }).catch(() => {});
+            }, 1000);
             function handleToggle(type) {
                 return async (e) => {
                     if (type === 'animal') {

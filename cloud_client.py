@@ -101,6 +101,13 @@ class CloudClient:
             except socketio.exceptions.BadNamespaceError:
                 pass
 
+    def send_detection_change(self, changes):
+        if self.connected:
+            try:
+                self.sio.emit("detection_changed", changes, namespace=NAMESPACE)
+            except socketio.exceptions.BadNamespaceError:
+                pass
+
     def _heartbeat_loop(self):
         while True:
             time.sleep(HEARTBEAT_S)

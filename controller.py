@@ -17,6 +17,8 @@ SAVED_SETTINGS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "
 DEFAULT_SETTINGS = {
     "system_on": True,
     "live_view_enabled": True,
+    "animal_detection": True,
+    "human_detection": True,
     "clips_enabled": True,
     "snapshots_enabled": True,
     "auto_duration_s": 10,
@@ -43,6 +45,8 @@ class Controller:
         self.last_alert_time = 0.0
         self.last_detection_at = None
         self.cloud = None
+        # A change made on the local web page that the server hasn't confirmed yet.
+        self.pending_detection = None
         self.relays = Relays(on_change=self.send_state)
         self.recorder = ClipRecorder()
         if server_url and device_token:
@@ -61,6 +65,7 @@ class Controller:
 
     def start(self, camera):
         self.camera = camera
+        self._apply_settings()
         if self.cloud:
             self.cloud.start()
 
@@ -75,9 +80,15 @@ class Controller:
             return
         with self.lock:
             was_on = self.settings["system_on"]
+            pending = self.pending_detection
             for key, default in DEFAULT_SETTINGS.items():
+                # Don't let an older server value undo a local change in flight.
+                if pending and key in pending:
+                    continue
                 if key in config and type(config[key]) is type(default):
                     self.settings[key] = config[key]
+            if pending and all(config.get(k) == v for k, v in pending.items()):
+                self.pending_detection = pending = None
             turned_off = was_on and not self.settings["system_on"]
             self._save_settings()
         self._apply_settings()
@@ -85,6 +96,28 @@ class Controller:
             print("System switched off from the cloud")
             self.relays.stop_auto()
             self.recorder.finish_all()
+        if pending:
+            # The server hasn't saved the local change yet, for example
+            # because it was made while offline. Send it again.
+            self.cloud.send_detection_change(pending)
+        self.send_state()
+
+    def set_local_detection(self, animal=None, human=None):
+        """The switches on the Pi's local web page. The change goes up to the cloud too."""
+        changes = {}
+        if animal is not None:
+            changes["animal_detection"] = bool(animal)
+        if human is not None:
+            changes["human_detection"] = bool(human)
+        with self.lock:
+            self.settings.update(changes)
+            self._save_settings()
+            if self.cloud:
+                self.pending_detection = {**(self.pending_detection or {}), **changes}
+                pending = self.pending_detection
+        self._apply_settings()
+        if self.cloud:
+            self.cloud.send_detection_change(pending)
         self.send_state()
 
     def on_command(self, target, on):
@@ -94,6 +127,9 @@ class Controller:
 
     def _apply_settings(self):
         s = self.settings
+        if self.camera:
+            self.camera.animal_detection_enabled = s["animal_detection"]
+            self.camera.human_detection_enabled = s["human_detection"]
         self.relays.configure(s["auto_duration_s"], s["manual_max_s"])
         self.recorder.configure(s["clip_pre_s"], s["clip_post_s"])
 
@@ -148,6 +184,8 @@ class Controller:
     def state(self):
         return {
             "system_on": self.system_on,
+            "animal_detection": self.settings["animal_detection"],
+            "human_detection": self.settings["human_detection"],
             "camera_ok": bool(self.camera and self.camera.camera_ok),
             "streaming": bool(self.cloud and self.cloud.live_on),
             "last_detection_at": self.last_detection_at,

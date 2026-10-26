@@ -314,10 +314,14 @@ def detection_settings():
     if request.method == 'POST':
         data = request.get_json() or {}
         if camera_instance is not None:
-            if 'animal' in data:
-                camera_instance.animal_detection_enabled = bool(data['animal'])
-            if 'human' in data:
-                camera_instance.human_detection_enabled = bool(data['human'])
+            if camera_instance.controller:
+                # Also tells the cloud, so the app shows the change.
+                camera_instance.controller.set_local_detection(data.get('animal'), data.get('human'))
+            else:
+                if 'animal' in data:
+                    camera_instance.animal_detection_enabled = bool(data['animal'])
+                if 'human' in data:
+                    camera_instance.human_detection_enabled = bool(data['human'])
     if camera_instance is None:
         return jsonify({'animal': True, 'human': True})
     return jsonify({
