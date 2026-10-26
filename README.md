@@ -40,7 +40,7 @@ Open `http://<pi-address>:5000` on the farm network to see the local feed and tu
 ## How it behaves
 
 - **Detection:** when an animal or human is seen, the siren and sprinkler run for the number of seconds set in the app (default 10).
-- **Alerts:** each detection sends an alert to the cloud. Alerts are at least 30 seconds apart by default, which you can change in the app's settings. An alert includes a snapshot and an H.264 clip covering a few seconds before and after the detection.
+- **Alerts:** each detection sends an alert to the cloud. Alerts are at least 30 seconds apart by default, which you can change in the app's settings. An alert includes a snapshot (at most 1280 px wide) and an H.264 clip covering a few seconds before and after the detection. To keep uploads small, clips are scaled to at most 640 px wide and compressed harder than ffmpeg's default; a 15-second clip is usually under 1 MB.
 - **System off:** switching the system off in the app pauses both detection and the camera. The siren and sprinkler can still be switched by hand.
 - **Manual control:** a siren or sprinkler switched on from the app turns itself off after the safety limit set in the app (default 5 minutes).
 - **Saved settings:** the last settings from the server are saved in `cloud_settings.json`, so a restart without internet keeps them.

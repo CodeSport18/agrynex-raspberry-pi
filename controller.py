@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 import cv2
 
-from clip_recorder import ClipRecorder, encode_mp4
+from clip_recorder import ClipRecorder, encode_mp4, shrink
 from cloud_client import CloudClient
 from relays import Relays
 
@@ -30,6 +30,8 @@ DEFAULT_SETTINGS = {
 
 LIVE_MAX_WIDTH = 640
 LIVE_JPEG_QUALITY = 70
+SNAPSHOT_MAX_WIDTH = 1280
+SNAPSHOT_JPEG_QUALITY = 80
 
 
 def _now_iso():
@@ -191,7 +193,8 @@ class Controller:
                        for d in human_detections]
         snapshot = None
         if self.settings["snapshots_enabled"]:
-            ok, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            ok, jpeg = cv2.imencode(".jpg", shrink(frame, SNAPSHOT_MAX_WIDTH),
+                                    [cv2.IMWRITE_JPEG_QUALITY, SNAPSHOT_JPEG_QUALITY])
             snapshot = jpeg.tobytes() if ok else None
         want_clip = self.settings["clips_enabled"]
         upload = self.cloud.report_alert(detections, self.last_detection_at, snapshot, want_clip)

@@ -11,6 +11,18 @@ import cv2
 
 CLIP_FPS = 10
 JPEG_QUALITY = 80
+# Clips are scaled down to at most this width to keep uploads small.
+CLIP_MAX_WIDTH = 640
+# H.264 quality: higher numbers mean smaller files (23 is ffmpeg's default).
+CLIP_CRF = 28
+
+
+def shrink(frame, max_width):
+    """Scale a frame down to max_width, keeping its shape. Smaller frames are left alone."""
+    h, w = frame.shape[:2]
+    if w <= max_width:
+        return frame
+    return cv2.resize(frame, (max_width, round(h * max_width / w)), interpolation=cv2.INTER_AREA)
 
 
 class Recording:
@@ -44,7 +56,8 @@ class ClipRecorder:
                 self.buffer.clear()
                 return
             self.last_frame_time = now
-        ok, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
+        # Shrinking before buffering also saves memory and CPU on the Pi.
+        ok, jpeg = cv2.imencode(".jpg", shrink(frame, CLIP_MAX_WIDTH), [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
         if not ok:
             return
         item = (now, jpeg.tobytes())
@@ -91,7 +104,7 @@ def encode_mp4(frames):
         result = subprocess.run(
             ["ffmpeg", "-y", "-loglevel", "error",
              "-f", "image2pipe", "-c:v", "mjpeg", "-framerate", f"{fps:.2f}", "-i", "-",
-             "-c:v", "libx264", "-preset", "veryfast",
+             "-c:v", "libx264", "-preset", "veryfast", "-crf", str(CLIP_CRF),
              # Even width and height and standard-range yuv420p, which
              # iPhones need. JPEG frames are full range by default.
              "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2:out_range=tv,format=yuv420p",
