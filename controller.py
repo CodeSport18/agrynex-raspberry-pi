@@ -10,6 +10,7 @@ import cv2
 from clip_recorder import ClipRecorder, encode_mp4, shrink
 from cloud_client import CloudClient
 from relays import Relays
+from shelly import ShellySwitch
 
 # The last settings from the server, so they survive a restart without internet.
 SAVED_SETTINGS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cloud_settings.json")
@@ -39,7 +40,7 @@ def _now_iso():
 
 
 class Controller:
-    def __init__(self, server_url=None, device_token=None):
+    def __init__(self, server_url=None, device_token=None, shelly_sprinkler_ip=None, shelly_password=None):
         self.lock = threading.Lock()
         # Lets the local web page wait for the detection switches to change.
         self.detection_changed = threading.Condition()
@@ -53,7 +54,11 @@ class Controller:
         self.cloud = None
         # A change made on the local web page that the server hasn't confirmed yet.
         self.pending_detection = None
-        self.relays = Relays(on_change=self.send_state)
+        devices = {}
+        if shelly_sprinkler_ip:
+            print(f"Sprinkler: also switching the Shelly at {shelly_sprinkler_ip}")
+            devices["sprinkler"] = [ShellySwitch("sprinkler", shelly_sprinkler_ip, shelly_password)]
+        self.relays = Relays(on_change=self.send_state, devices=devices)
         self.recorder = ClipRecorder()
         if server_url and device_token:
             self.cloud = CloudClient(

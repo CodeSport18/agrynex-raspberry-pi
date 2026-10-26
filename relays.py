@@ -1,7 +1,9 @@
 """Siren and sprinkler outputs.
 
 Each output is on while it's switched on by hand (up to manual_max_s) or for
-auto_duration_s after a detection, whichever ends later.
+auto_duration_s after a detection, whichever ends later. An output can also
+drive network devices, such as a Shelly relay for the sprinkler, alongside its
+GPIO pin.
 """
 import threading
 import time
@@ -14,8 +16,10 @@ OUTPUT_NAMES = ("siren", "sprinkler")
 
 
 class Relays:
-    def __init__(self, on_change=None):
+    def __init__(self, on_change=None, devices=None):
         self.pins = {"siren": LED(SIREN_PIN), "sprinkler": LED(SPRINKLER_PIN)}
+        # Extra devices per output, each with set(on, off_at) and close().
+        self.devices = devices or {}
         self.manual_until = {name: 0.0 for name in OUTPUT_NAMES}
         self.auto_until = {name: 0.0 for name in OUTPUT_NAMES}
         self.is_on = {name: False for name in OUTPUT_NAMES}
@@ -76,6 +80,9 @@ class Relays:
                     "auto": auto,
                     "off_at": max(ends) if ends else None,
                 }
+                if self.devices.get(name):
+                    # False if any network device for this output can't be reached.
+                    out[name]["devices_ok"] = all(d.reachable is not False for d in self.devices[name])
             return out
 
     def off(self):
@@ -84,9 +91,17 @@ class Relays:
                 self.manual_until[name] = self.auto_until[name] = 0.0
         self._apply()
 
+    def close(self):
+        """Everything off, including network devices, before the program exits."""
+        self.off()
+        for devices in self.devices.values():
+            for device in devices:
+                device.close()
+
     def _apply(self):
         now = time.time()
         changed = False
+        targets = {}
         with self.lock:
             for name in OUTPUT_NAMES:
                 want = self.manual_until[name] > now or self.auto_until[name] > now
@@ -97,6 +112,12 @@ class Relays:
                     else:
                         self.pins[name].off()
                     changed = True
+                ends = [t for t in (self.manual_until[name], self.auto_until[name]) if t > now]
+                targets[name] = (want, max(ends) if ends else None)
+        # Network devices are told outside the lock; they send in the background.
+        for name, (want, off_at) in targets.items():
+            for device in self.devices.get(name, []):
+                device.set(want, off_at)
         if changed and self.on_change:
             self.on_change()
 

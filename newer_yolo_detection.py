@@ -428,7 +428,12 @@ def main():
     video_source = int(video_source) if video_source.isdigit() else video_source
     print(f"Video source: {video_source}")
     
-    controller = Controller(os.environ.get('AGRYNEX_SERVER_URL'), os.environ.get('AGRYNEX_DEVICE_TOKEN'))
+    controller = Controller(
+        os.environ.get('AGRYNEX_SERVER_URL'),
+        os.environ.get('AGRYNEX_DEVICE_TOKEN'),
+        shelly_sprinkler_ip=os.environ.get('AGRYNEX_SHELLY_SPRINKLER_IP'),
+        shelly_password=os.environ.get('AGRYNEX_SHELLY_PASSWORD'),
+    )
     
     # Initialize camera
     camera_instance = Camera(video_source, controller)
@@ -455,7 +460,7 @@ def main():
     finally:
         if camera_instance:
             camera_instance.stop()
-        controller.relays.off()
+        controller.relays.close()
         print("Detection system stopped.")
 
 

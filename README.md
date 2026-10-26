@@ -7,6 +7,8 @@ Runs on a Raspberry Pi at the farm. It watches the camera for animals (MobileNet
 | 12   | Siren     |
 | 16   | Sprinkler |
 
+The sprinkler can also be switched by a Shelly smart relay (Gen2 or newer, such as the Shelly 1 Gen4) anywhere on the same network, so it doesn't need to be wired to the Pi. Set `AGRYNEX_SHELLY_SPRINKLER_IP` in `.env` to the Shelly's IP address, and give the Shelly a fixed IP on your router. The Pi then switches the Shelly together with GPIO 16 through Shelly's local RPC API. Each "on" command also sets the Shelly's own off-timer to a few seconds after the run should end, so if the Pi crashes or loses Wi-Fi, the sprinkler still turns off. If you protected the Shelly with a password in the Shelly app, also set `AGRYNEX_SHELLY_PASSWORD`.
+
 It connects to the [Agrynex cloud server](https://github.com/CodeSport18/agrynex-cloud-server), so the mobile app can:
 
 - see alerts with a snapshot and a short clip;
@@ -52,6 +54,7 @@ Open `http://<pi-address>:5000` on the farm network to see the local feed and tu
 | `newer_yolo_detection.py` | Camera loop, detection and the local web viewer |
 | `controller.py` | Connects detection to the relays, alert clips and the cloud |
 | `relays.py` | Siren and sprinkler timing (automatic runs and manual control with a safety limit) |
+| `shelly.py` | Switches a Shelly relay over the local network, with its own off-timer as a safety net |
 | `clip_recorder.py` | Keeps recent frames and encodes alert clips with ffmpeg |
 | `cloud_client.py` | Socket.IO connection to the server, plus a background queue that uploads alerts |
 | `yolo_detection_coyote_video.py` | Older test version that reads `coyote_meets_camera (540p).mp4` and doesn't use GPIO or the cloud |
